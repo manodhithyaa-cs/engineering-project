@@ -1,0 +1,14 @@
+@import url(__global.css);
+
+.row.mb-5 {
+    margin-top: 3rem;
+}
+
+.col.card {
+    margin: 10px;
+    box-shadow: 0 10px 10px rgba(0,0,0,0.5);
+}
+
+table {
+    box-shadow: 0 10px 10px rgba(0,0,0,0.5);
+}
