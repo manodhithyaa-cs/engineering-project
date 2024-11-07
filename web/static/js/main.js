@@ -58,8 +58,6 @@ new Chart(ctx3, {
         datasets: [{
             label: 'Avg Moisture Percent (This Week)',
             data: [{
-
-            }, {
                 x: 20,
                 y: 30,
                 r: 15
