@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, jsonify
 import matplotlib
 import csv
 import datetime
@@ -22,7 +22,7 @@ def index():
     if request.method == "POST":
         pump_status = request.form.get("pump_status")
         print(pump_status)
-        return "Data Received from HTML Ajax"
+        return jsonify({"status": "Data Received from HTML Ajax", "pump_status": pump_status})
     return render_template("index.html")
 
 @app.route("/project_details", methods=["GET", "POST"])
