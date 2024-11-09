@@ -1,51 +1,79 @@
 import network
 import urequests
-import machine
 import time
+from machine import Pin, ADC
 
-SSID = ""
-PASSWORD = ""
+# Configuration
+WIFI_SSID = 'your_SSID'
+WIFI_PASSWORD = 'your_PASSWORD'
+SERVER_URL = 'http://192.168.1.100:80'  # Replace with your local server's IP
 
-SERVER_IP = ""
-SERVER_PORT = "3000"
-
-soil_moisture_pin = machine.ADC(machine.pin(34))
-soil_moisture_pin.width(machine.ADC.WIDTH_10BIT)
-soil_moisture_pin.atten(machine.ADC.ATTN_11DB)
+# Pin setup
+soil_sensor = ADC(Pin(34))  # Analog pin for soil moisture sensor
+soil_sensor.atten(ADC.ATTN_11DB)  # Set attenuation to read full range (0-3.3V)
+buzzer = Pin(27, Pin.OUT)  # Digital pin for buzzer
 
 def connect_wifi():
     wlan = network.WLAN(network.STA_IF)
-    wlan,active(True)
-    wlan.connect(SSID, PASSWORD)
-
-    print("Connecting to wifi...", end="")
-
-    while not wlan.isconnected():
-        time.sleep(.5)
+    wlan.active(True)
+    wlan.connect(WIFI_SSID, WIFI_PASSWORD)
+    print("Connecting to Wi-Fi...")
+    
+    # Timeout after 10 seconds if connection is not established
+    timeout = 10
+    while not wlan.isconnected() and timeout > 0:
+        time.sleep(0.5)
+        timeout -= 1
         print(".", end="")
-
-    print("\nConnected:", wlan.ifconif())
+    
+    if wlan.isconnected():
+        print("\nConnected to Wi-Fi")
+        print("Network config:", wlan.ifconfig())
+    else:
+        print("\nFailed to connect to Wi-Fi")
+        raise Exception("Wi-Fi connection failed")
 
 def get_soil_moisture():
-    moisture_value = soil_moisture_pin.read()
+    readings = []
+    for _ in range(5):  # Take 5 readings for averaging
+        readings.append(soil_sensor.read())
+        time.sleep(0.1)
+    average_reading = sum(readings) / len(readings)
+    moisture_percent = (4095 - average_reading) / 4095 * 100  # Map to percentage
+    return moisture_percent
 
-    return moisture_value, int(moisture_value / 1023) * 100
-
-def send_data(moisture_value, moisture_percent):
-    url = f"http://{SERVER_IP}:{SERVER_PORT}/"
-    payload = { "moisture_value": moisture_value, "moisture_percent": moisture_percent }
-    try:
-        response = urequests.post(url, json=payload)
-        response.close()
-        print("Data Sent", payload)
-    except Exception as error:
-        print("Error", error)
+def send_data(moisture_percent):
+    retries = 3
+    while retries > 0:
+        try:
+            response = urequests.post(SERVER_URL, json={"moisture": moisture_percent})
+            print("Data sent. Response code:", response.status_code)
+            response.close()
+            return
+        except Exception as e:
+            print(f"Failed to send data. Retries left: {retries} - Error: {e}")
+            retries -= 1
+            time.sleep(2)  # Wait before retrying
+    print("Failed to send data after retries.")
 
 def main():
     connect_wifi()
+    
     while True:
-        moisture_value = get_soil_moisture()
-        send_data(moisture_value=moisture_value[0], moisture_percent=moisture_value[1])
-        time.sleep(10)
+        moisture_percent = get_soil_moisture()
+        print("Soil Moisture: {:.2f}%".format(moisture_percent))
 
+        if moisture_percent < 30:
+            buzzer.on()  # Turn on buzzer
+            print("Moisture low! Buzzer ON")
+        else:
+            buzzer.off()  # Turn off buzzer
+            print("Moisture level sufficient. Buzzer OFF")
+        
+        # Send data to server
+        send_data(moisture_percent)
+        
+        time.sleep(5)  # Wait 5 seconds before next reading
+
+# Run main function
 main()
