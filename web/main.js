@@ -19,6 +19,8 @@ setInterval(() => {
         <td>${data_moisture.length + 1}</td><td>${data.time}</td><td>${data.moisture_content}</td><td>${data.pump_status}</td></tr>`
     
     })
+
+    console.log("hello")
 }, 2000);
 
 // Chart section

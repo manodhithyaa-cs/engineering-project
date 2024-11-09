@@ -1,17 +1,23 @@
 import network
-import urequests
 import time
 from machine import Pin, ADC
+import urequests
+import socket
+import struct
+import BlynkLib  # Make sure the Blynk library is available
 
 # Configuration
 WIFI_SSID = 'your_SSID'
 WIFI_PASSWORD = 'your_PASSWORD'
-SERVER_URL = 'http://192.168.1.100:80'  # Replace with your local server's IP
+BLYNK_AUTH_TOKEN = 'your_BLYNK_AUTH_TOKEN'  # Replace with your Blynk Auth Token
 
 # Pin setup
 soil_sensor = ADC(Pin(34))  # Analog pin for soil moisture sensor
 soil_sensor.atten(ADC.ATTN_11DB)  # Set attenuation to read full range (0-3.3V)
 buzzer = Pin(27, Pin.OUT)  # Digital pin for buzzer
+
+# Set up Blynk
+blynk = BlynkLib.Blynk(BLYNK_AUTH_TOKEN)
 
 def connect_wifi():
     wlan = network.WLAN(network.STA_IF)
@@ -42,19 +48,19 @@ def get_soil_moisture():
     moisture_percent = (4095 - average_reading) / 4095 * 100  # Map to percentage
     return moisture_percent
 
-def send_data(moisture_percent):
-    retries = 3
-    while retries > 0:
-        try:
-            response = urequests.post(SERVER_URL, json={"moisture": moisture_percent})
-            print("Data sent. Response code:", response.status_code)
-            response.close()
-            return
-        except Exception as e:
-            print(f"Failed to send data. Retries left: {retries} - Error: {e}")
-            retries -= 1
-            time.sleep(2)  # Wait before retrying
-    print("Failed to send data after retries.")
+def send_to_blynk(moisture_percent):
+    # Sending soil moisture value to Blynk virtual pin (V1)
+    blynk.virtual_write(1, moisture_percent)
+
+    # If moisture is low, send buzzer status to V2 (0 = OFF, 1 = ON)
+    if moisture_percent < 30:
+        buzzer.on()
+        print("Moisture low! Buzzer ON")
+        blynk.virtual_write(2, 1)  # Set virtual pin V2 (buzzer) to ON
+    else:
+        buzzer.off()
+        print("Moisture level sufficient. Buzzer OFF")
+        blynk.virtual_write(2, 0)  # Set virtual pin V2 (buzzer) to OFF
 
 def main():
     connect_wifi()
@@ -63,15 +69,11 @@ def main():
         moisture_percent = get_soil_moisture()
         print("Soil Moisture: {:.2f}%".format(moisture_percent))
 
-        if moisture_percent < 30:
-            buzzer.on()  # Turn on buzzer
-            print("Moisture low! Buzzer ON")
-        else:
-            buzzer.off()  # Turn off buzzer
-            print("Moisture level sufficient. Buzzer OFF")
+        # Send soil moisture data to Blynk
+        send_to_blynk(moisture_percent)
         
-        # Send data to server
-        send_data(moisture_percent)
+        # Run Blynk loop to handle communication
+        blynk.run()
         
         time.sleep(5)  # Wait 5 seconds before next reading
 
